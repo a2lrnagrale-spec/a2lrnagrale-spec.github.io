@@ -36,7 +36,7 @@ const RECIPE_INGREDIENTS_G = {
   'masoor-pulao': { rice: 100, masoorDal: 20, ...COMMON_RECIPE_RATES_G },
   'chavli-khichdi': { rice: 100, chavli: 20, ...COMMON_RECIPE_RATES_G }
 };
-const COST_PER_STUDENT = { primary: 2.59, upper: 3.82 };
+const COST_PER_STUDENT = { primary: 2.59, upper: 3.88 };
 const CURRENT_MONTH_STOCK = {
   rice: [294, 213], moongDal: [9.5, 7], toorDal: [3, 2], masoorDal: [5, 3.5], matki: [5, 3.5],
   moong: [3, 2], chavli: [5, 3.5], harbhara: [5, 3.5], vatana: [18, 13], jeera: [0, 0],
