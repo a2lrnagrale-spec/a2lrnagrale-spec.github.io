@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="mr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#176b57">
+  <title>पोषण नोंदवही | PM POSHAN</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20261105-5">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">पोषण</div>
+        <div><strong>नोंदवही</strong><small>PM POSHAN व्यवस्थापन</small></div>
+      </div>
+      <nav class="nav-list" aria-label="मुख्य नेव्हिगेशन">
+        <button class="nav-item active" data-view="dashboard" data-class="primary"><span class="nav-icon">⌂</span>मुख्यपृष्ठ</button>
+        <button class="nav-item" data-view="classes15" data-class="primary"><span class="nav-icon">▦</span>इयत्ता १ ते ५</button>
+        <button class="nav-item" data-view="classes68" data-class="upper"><span class="nav-icon">▦</span>इयत्ता ६ ते ८</button>
+        <div class="nav-group-label">मासिक नोंदी</div>
+        <div class="month-nav" id="monthNav"></div>
+        <div class="nav-group-label">अहवाल</div>
+        <button class="nav-item" data-view="report"><span class="nav-icon">▤</span>उपयोगिता अहवाल</button>
+        <button class="nav-item" data-view="annual"><span class="nav-icon">◫</span>वार्षिक उपयोगिता</button>
+        <button class="nav-item" data-view="stock"><span class="nav-icon">▥</span>साठा नोंद</button>
+        <button class="nav-item" data-view="rice"><span class="nav-icon">◌</span>तांदूळ नोंद</button>
+        <div class="nav-group-label">व्यवस्था</div>
+        <button class="nav-item" data-view="settings"><span class="nav-icon">⚙</span>सेटिंग्ज</button>
+      </nav>
+      <div class="sidebar-footer"><span class="status-dot"></span><span id="sidebarStatus">ऑनलाइन जोडणी तपासत आहे</span></div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <button class="menu-toggle" id="menuToggle" aria-label="मेनू">☰</button>
+        <div class="breadcrumb"><span>PM POSHAN</span><b>/</b><strong id="pageLabel">मुख्यपृष्ठ</strong></div>
+        <div class="top-actions"><span class="today" id="today"></span><span class="sync-status" id="syncStatus" role="status">तपासत आहे…</span><button class="icon-button" id="printButton" title="छापा">⎙</button><button class="avatar" id="authButton" type="button">लॉगिन</button><button class="avatar logout-button" id="logoutButton" type="button" hidden>बाहेर पडा</button></div>
+      </header>
+      <div id="app" class="page-wrap"></div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <dialog class="auth-dialog" id="authDialog" aria-labelledby="authTitle">
+    <form class="auth-form" id="authForm">
+      <button class="dialog-close" id="closeAuthDialog" type="button" aria-label="बंद करा">×</button>
+      <div class="eyebrow">मालक खाते</div>
+      <h2 id="authTitle">नोंदवहीत लॉगिन</h2>
+      <p class="page-subtitle">डेटा बदलण्यासाठी अधिकृत ईमेलने लॉगिन करा.</p>
+      <label class="field"><span>ईमेल</span><input name="email" type="email" autocomplete="username" required></label>
+      <label class="field"><span>पासवर्ड</span><input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="primary" id="loginSubmit" type="submit">लॉगिन</button>
+      <p class="auth-error" id="authError" role="alert"></p>
+    </form>
+  </dialog>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js?v=1"></script>
+  <script src="app.js?v=20261105-5"></script>
+</body>
+</html>
