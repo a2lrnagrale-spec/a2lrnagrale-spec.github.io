@@ -481,7 +481,270 @@ upyogitaPrintView = function() {
 };
 const originalRender = render;
 const reportFormatRender = render;
-render = function() { originalRender(); if (state.activeView === 'report') { app.innerHTML = upyogitaPrintView(); bind(); } correctDisplayedWeekdays(); bindReportClassSelector(); bindMonthClassSelector(); bindStockRiceClassSelector(); updateAccessUi(); };
+render = function() {
+  // Destroy charts before re-render to prevent leaks
+  if (window._chartInstances) {
+    Object.values(window._chartInstances).forEach(c => { try { c.destroy(); } catch(e){} });
+    window._chartInstances = {};
+  }
+  originalRender();
+  if (state.activeView === 'report') { app.innerHTML = upyogitaPrintView(); bind(); }
+  // Use enhanced dashboard view
+  if (state.activeView === 'dashboard') {
+    app.innerHTML = enhancedDashboard();
+    bind();
+  }
+  correctDisplayedWeekdays();
+  bindReportClassSelector();
+  bindMonthClassSelector();
+  bindStockRiceClassSelector();
+  bindBackupButton();
+  applyEnhancements();
+  updateAccessUi();
+};
+function currentMonthIndex() { return new Date().getMonth() >= 3 ? new Date().getMonth() - 3 : 9; }
+function monthAttendance(index, classGroup) { const prevClass = state.activeClass; state.activeClass = classGroup; const total = totalAttendance(getMonth(index)); state.activeClass = prevClass; return total; }
+function stockWarn(msg) { const toast = document.getElementById('toast'); toast.textContent = msg; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2200); }
+function countAttendanceDays(index) { return getMonth(index).days.filter(day => day.attendance > 0).length; }
+
+function enhancedDashboard() {
+  const month = getMonth(currentMonthIndex());
+  const primaryAtt = monthAttendance(currentMonthIndex(), CLASS_GROUPS.primary);
+  const upperAtt = monthAttendance(currentMonthIndex(), CLASS_GROUPS.upper);
+  const totalAtt = primaryAtt + upperAtt;
+  const totalStrength = Number(state.profile.primaryStrength || 65) + Number(state.profile.upperStrength || 40);
+  const cookedDays = month.days.filter(day => day.attendance > 0).length;
+  const rice = closing(month, 'rice');
+
+  // Monthly trend data (all 12 months, primary + upper)
+  const labels = MONTHS.map(m => m[0]);
+  const primarySeries = MONTHS.map((_, i) => monthAttendance(i, CLASS_GROUPS.primary));
+  const upperSeries = MONTHS.map((_, i) => monthAttendance(i, CLASS_GROUPS.upper));
+
+  // Anomaly detection: months with unusually low or high attendance
+  const monthlyTotals = MONTHS.map((_, i) => primarySeries[i] + upperSeries[i]);
+  const nonZeroTotals = monthlyTotals.filter(v => v > 0);
+  const avgMonthly = nonZeroTotals.length ? nonZeroTotals.reduce((a,b)=>a+b, 0) / nonZeroTotals.length : 0;
+  const lowMonthFlags = monthlyTotals.map(v => v > 0 && avgMonthly > 0 && v < avgMonthly * 0.5);
+
+  // 16-day stock warning (rice)
+  const dailyRiceUse = totalAtt > 0 ? rice / Math.max(cookedDays, 1) : 0;
+  const daysLeft = dailyRiceUse > 0 ? Math.floor(rice / dailyRiceUse) : '—';
+  const stockWarnText = daysLeft !== '—' && daysLeft < 16
+    ? `तांदूळ साठा ${daysLeft} दिवसांसाठी पुरेल — पुनःपूर्ती आवश्यक`
+    : '';
+
+  return `<section class="hero home-hero">
+    <div>
+      <div class="eyebrow">शैक्षणिक वर्ष ${state.profile.startYear} – ${Number(state.profile.startYear) + 1}</div>
+      <h1 class="page-title">नमस्कार,<br><span class="school-name">${state.profile.schoolName || 'आपली शाळा'}</span></h1>
+      <p class="page-subtitle">इयत्ता १ ते ५ : ${format(Number(state.profile.primaryStrength||65))} विद्यार्थी · इयत्ता ६ ते ८ : ${format(Number(state.profile.upperStrength||40))} विद्यार्थी · एकूण पटसंख्या : ${format(totalStrength)} विद्यार्थी</p>
+      ${stockWarnText ? `<div class="metric-note down" style="margin-top:10px;">⚠ ${stockWarnText}</div>` : ''}
+    </div>
+    <div class="hero-actions">
+      <button class="secondary" id="backupButton">↓ बॅकअप</button>
+      <button class="primary" data-view="month" data-month="${state.activeMonth}" data-class="primary">+ आजची नोंद</button>
+    </div>
+  </section>
+
+  <section class="metrics">
+    <div class="metric-card">
+      <div class="metric-top"><span>या महिन्याची उपस्थिती</span><span class="metric-icon">◉</span></div>
+      <div class="metric-value">${format(totalAtt)}</div>
+      <div class="metric-note good">ताटे नोंदवलेली</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-top"><span>तांदूळ शिल्लक</span><span class="metric-icon orange">◒</span></div>
+      <div class="metric-value">${format(rice)} <small>कि.ग्रॅ.</small></div>
+      <div class="metric-note ${daysLeft !== '—' && daysLeft < 16 ? 'down' : 'up'}">${daysLeft !== '—' ? `सुमारे ${daysLeft} दिवस पुरेल` : 'उपलब्ध साठा'}</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-top"><span>केंद्र</span><span class="metric-icon">⌂</span></div>
+      <div class="metric-value">${state.profile.centerName || '-'}</div>
+      <div class="metric-note">शाळेची माहिती</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-top"><span>लाभार्थी पट</span><span class="metric-icon orange">♧</span></div>
+      <div class="metric-value">${format(totalStrength)}</div>
+      <div class="metric-note">इयत्ता १ ते ५ + इयत्ता ६ ते ८</div>
+    </div>
+  </section>
+
+  ${stockWarnText ? `<section class="access-notice" style="border-color:#f0d4ae;background:#fff7eb;color:#825326;">⚠ ${stockWarnText}</section>` : ''}
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div><h2 class="panel-title">मासिक आढावा</h2><div class="panel-kicker">एप्रिल ते मार्च, वर्गनिहाय ताटे</div></div>
+      <span class="pill">·</span>
+    </div>
+    <div class="chart-wrap" style="height:280px;"><canvas id="attendanceTrendChart"></canvas></div>
+  </section>
+
+  <section class="class-switch" style="margin-top:20px;">
+    <div class="class-card primary">
+      <div><h2>इयत्ता १ ते ५</h2><p>${state.profile.standard || 'प्राथमिक विभागाची स्वतंत्र नोंदवही'}</p><div class="metric-note">${format(primaryAtt)} ताटे · ${countAttendanceDays(currentMonthIndex())} दिवस शिजवले</div></div>
+      <button class="primary" data-view="classes15" data-class="primary">पेज उघडा →</button>
+    </div>
+    <div class="class-card upper">
+      <div><h2>इयत्ता ६ ते ८</h2><p>उच्च प्राथमिक विभागाची स्वतंत्र नोंदवही</p><div class="metric-note">${format(upperAtt)} ताटे · ${countAttendanceDays(currentMonthIndex())} दिवस शिजवले</div></div>
+      <button class="secondary" data-view="classes68" data-class="upper">पेज उघडा →</button>
+    </div>
+  </section>
+
+  <section class="panel school-details" style="margin-top:20px;">
+    <div class="panel-heading"><div><h2 class="panel-title">शाळेची माहिती</h2><div class="panel-kicker">मुख्याध्यापक आणि वर्गनिहाय पटसंख्या</div></div><button class="secondary" id="editProfile">संपादन</button></div>
+    <div class="school-detail-grid">
+      <div><span>मुख्याध्यापक</span><b>${state.profile.headmaster || '—'}</b></div>
+      <div><span>इयत्ता १ ते ५ पटसंख्या</span><b>${state.profile.primaryStrength || 0} विद्यार्थी</b></div>
+      <div><span>इयत्ता ६ ते ८ पटसंख्या</span><b>${state.profile.upperStrength || 0} विद्यार्थी</b></div>
+    </div>
+  </section>`;
+}
+
+function enhanceMonthView(index) {
+  const month = getMonth(index);
+  const toolbar = `<div class="toolbar" style="margin:16px 0 0 0;"><span class="pill">${month.days.filter(day=>day.attendance>0).length} / ${month.days.length} दिवस नोंदवले</span><button class="chip" id="fillFullBtn">+ सर्व दिवस भरा</button><button class="chip" id="clearAllBtn">✕ सर्व रिकामे करा</button></div>`;
+  // Insert after hero actions if not present
+  const hero = document.querySelector('.hero-actions');
+  if (hero && !document.getElementById('fillFullBtn')) hero.insertAdjacentHTML('afterend', toolbar);
+}
+
+function applyEnhancements() {
+  try {
+    // Dashboard: add chart
+    if (state.activeView === 'dashboard' && window.Chart) {
+      const canvas = document.getElementById('attendanceTrendChart');
+      if (canvas && !window._chartInstances?.attendanceTrend) {
+        const labels = MONTHS.map(m => m[0]);
+        const primarySeries = MONTHS.map((_, i) => monthAttendance(i, CLASS_GROUPS.primary));
+        const upperSeries = MONTHS.map((_, i) => monthAttendance(i, CLASS_GROUPS.upper));
+        const ctx = canvas.getContext('2d');
+        window._chartInstances = window._chartInstances || {};
+        window._chartInstances.attendanceTrend = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              { label: 'इयत्ता १ ते ५', data: primarySeries, borderColor: '#16745d', backgroundColor: 'rgba(22,116,93,.12)', fill: true, tension: .35, borderWidth: 2, pointRadius: 3 },
+              { label: 'इयत्ता ६ ते ८', data: upperSeries, borderColor: '#df7b35', backgroundColor: 'rgba(223,123,53,.12)', fill: true, tension: .35, borderWidth: 2, pointRadius: 3 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'top', labels: { font: { family: 'Noto Sans Devanagari' }, padding: 14 } }, tooltip: { mode: 'index', intersect: false } },
+            scales: {
+              x: { grid: { display: false }, ticks: { font: { family: 'Noto Sans Devanagari', size: 11 } } },
+              y: { beginAtZero: true, grid: { color: '#eef4f0' }, ticks: { font: { family: 'Noto Sans Devanagari', size: 11 } } }
+            },
+            interaction: { mode: 'nearest', axis: 'x', intersect: false }
+          }
+        });
+      }
+    }
+
+    // Month view: enhance toolbar
+    if (state.activeView === 'month' && !document.getElementById('fillFullBtn')) {
+      enhanceMonthView(state.activeMonth);
+      // Add CSV export for daily table
+      const monthHero = document.querySelector('.hero-actions');
+      if (monthHero && !document.getElementById('exportMonthCsv')) {
+        monthHero.insertAdjacentHTML('afterbegin', '<button class="secondary" id="exportMonthCsv">⬇ CSV निर्यात</button>');
+        const csvBtn = document.getElementById('exportMonthCsv');
+        if (csvBtn) csvBtn.onclick = () => exportCsv('month');
+      }
+      // Bind quick-action buttons
+      const fillBtn = document.getElementById('fillFullBtn');
+      const clearBtn = document.getElementById('clearAllBtn');
+      if (fillBtn) fillBtn.onclick = () => {
+        const month = getMonth(state.activeMonth);
+        month.days.forEach(day => {
+          if (day.dayStatus === 'working' || !day.dayStatus) day.attendance = day.strength || 0;
+        });
+        save(); render();
+      };
+      if (clearBtn) clearBtn.onclick = () => {
+        if (!confirm('सर्व दिवसांची उपस्थिती ० करायची?')) return;
+        const month = getMonth(state.activeMonth);
+        month.days.forEach(day => { day.attendance = 0; });
+        save(); render();
+      };
+    }
+
+    // Annual table: add CSV export
+    if (state.activeView === 'annual' && !document.getElementById('exportAnnualCsv')) {
+      const hero = document.querySelector('.hero-actions');
+      if (hero) {
+        hero.insertAdjacentHTML('afterbegin', '<button class="secondary" id="exportAnnualCsv">⬇ CSV निर्यात</button>');
+        document.getElementById('exportAnnualCsv').onclick = () => exportCsv('annual');
+      }
+    }
+
+    // Classes15/68: add CSV export for month table
+    if (['classes15','classes68'].includes(state.activeView) && !document.getElementById('exportClassCsv')) {
+      const hero = document.querySelector('.hero-actions');
+      if (hero) {
+        hero.insertAdjacentHTML('afterbegin', '<button class="secondary" id="exportClassCsv">⬇ CSV निर्यात</button>');
+        document.getElementById('exportClassCsv').onclick = () => exportCsv('class');
+      }
+    }
+
+  } catch (err) { console.warn('Enhancement error:', err); }
+}
+
+function exportCsv(type) {
+  let rows = [];
+  let filename = '';
+  if (type === 'annual') {
+    filename = `annual-${state.profile.startYear}.csv`;
+    rows.push(['महिना','वर्ष','लाभार्थी ताटे','एकूण प्राप्ती','एकूण वापर','तांदूळ शिल्लक']);
+    MONTHS.forEach(([name], i) => {
+      const m = getMonth(i);
+      rows.push([
+        name, monthYear(i),
+        totalAttendance(m),
+        Object.values(m.receipt).reduce((a,b)=>a+Number(b||0),0),
+        ITEMS.reduce((a,[key])=>a+totalCooked(m,key),0),
+        closing(m,'rice')
+      ]);
+    });
+  } else {
+    filename = `class-${state.activeClass}-${state.profile.startYear}.csv`;
+    rows.push(['महिना','वर्ष','उपस्थिती','तांदूळ शिल्लक']);
+    MONTHS.forEach(([name], i) => {
+      const m = getMonth(i);
+      rows.push([name, monthYear(i), totalAttendance(m), closing(m,'rice')]);
+    });
+  }
+  const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿'+csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  showToast('CSV निर्यात झाले');
+}
+
+// Re-bind backup button after enhanced dashboard renders
+function bindBackupButton() {
+  const backup = document.getElementById('backupButton');
+  if (backup && !backup._bound) {
+    backup._bound = true;
+    backup.onclick = () => {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type:'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'mdm-backup.json';
+      link.click();
+      showToast('बॅकअप डाउनलोड झाला');
+    };
+  }
+  const edit = document.getElementById('editProfile');
+  if (edit && !edit._bound) {
+    edit._bound = true;
+    edit.onclick = () => navigate('settings');
+  }
+}
+
 document.getElementById('menuToggle').onclick = event => { event.stopPropagation(); document.getElementById('sidebar').classList.toggle('open'); };
 document.addEventListener('click', event => { const sidebar = document.getElementById('sidebar'); if (window.innerWidth <= 680 && sidebar.classList.contains('open') && !sidebar.contains(event.target)) sidebar.classList.remove('open'); });
 document.getElementById('printButton').onclick = () => window.print();
